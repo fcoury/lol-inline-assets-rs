@@ -1,12 +1,18 @@
 use std::{
     fs,
     io::{Error, ErrorKind},
-    path::Path,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
 };
 
 use lol_html::{element, html_content::ContentType, HtmlRewriter, Settings};
 
-pub fn inline<P>(file: P) -> anyhow::Result<String>
+pub struct InlineResult {
+    pub html: String,
+    pub files: Vec<PathBuf>,
+}
+
+pub fn inline<P>(file: P) -> anyhow::Result<InlineResult>
 where
     P: AsRef<Path>,
 {
@@ -14,6 +20,7 @@ where
     let root = file.as_ref().parent().unwrap_or(Path::new(""));
 
     let mut output = vec![];
+    let deps = Arc::new(Mutex::new(vec![]));
     let mut rewriter = HtmlRewriter::new(
         Settings {
             element_content_handlers: vec![
@@ -35,6 +42,8 @@ where
                         )));
                     }
                     let img_contents = fs::read(&path)?;
+                    let mut deps = deps.lock().unwrap();
+                    deps.push(path);
                     let new_src = base64::encode(img_contents);
                     let new_src = format!("data:image/png;base64,{}", new_src);
 
@@ -78,6 +87,8 @@ where
                         )));
                     }
                     let mut css = fs::read_to_string(&path)?;
+                    let mut deps = deps.lock().unwrap();
+                    deps.push(path);
 
                     if let Some(media) = el.get_attribute("media") {
                         css = format!("@media {} {{ {} }}", media, css);
@@ -116,6 +127,8 @@ where
                         )));
                     }
                     let js = fs::read_to_string(&path)?;
+                    let mut deps = deps.lock().unwrap();
+                    deps.push(path);
 
                     el.replace(
                         &format!("<script type=\"text/javascript\">{}</script>", js),
@@ -133,6 +146,8 @@ where
     rewriter.write(html.as_bytes())?;
     rewriter.end()?;
 
-    let output = String::from_utf8(output)?;
-    Ok(output)
+    let html = String::from_utf8(output)?;
+    let files = Arc::try_unwrap(deps).unwrap();
+    let files = files.into_inner().unwrap();
+    Ok(InlineResult { html, files })
 }
