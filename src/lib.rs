@@ -1,4 +1,8 @@
-use std::{fs, path::Path};
+use std::{
+    fs,
+    io::{Error, ErrorKind},
+    path::Path,
+};
 
 use lol_html::{element, html_content::ContentType, HtmlRewriter, Settings};
 
@@ -23,7 +27,13 @@ where
                         return Ok(());
                     }
 
-                    let path = root.clone().join(src);
+                    let path = root.clone().join(&src);
+                    if !path.exists() {
+                        return Err(Box::new(Error::new(
+                            ErrorKind::NotFound,
+                            format!("Can't inline image {}: file does not exist", src),
+                        )));
+                    }
                     let img_contents = fs::read(&path)?;
                     let new_src = base64::encode(img_contents);
                     let new_src = format!("data:image/png;base64,{}", new_src);
@@ -60,7 +70,13 @@ where
                         return Ok(());
                     }
 
-                    let path = root.clone().join(href);
+                    let path = root.clone().join(&href);
+                    if !path.exists() {
+                        return Err(Box::new(Error::new(
+                            ErrorKind::NotFound,
+                            format!("Can't inline styles from {}: file does not exist", href),
+                        )));
+                    }
                     let mut css = fs::read_to_string(&path)?;
 
                     if let Some(media) = el.get_attribute("media") {
@@ -92,7 +108,13 @@ where
                         return Ok(());
                     }
 
-                    let path = root.clone().join(src);
+                    let path = root.clone().join(&src);
+                    if !path.exists() {
+                        return Err(Box::new(Error::new(
+                            ErrorKind::NotFound,
+                            format!("Can't inline script from {}: file does not exist", src),
+                        )));
+                    }
                     let js = fs::read_to_string(&path)?;
 
                     el.replace(
