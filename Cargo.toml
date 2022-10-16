@@ -1,7 +1,11 @@
 [package]
+authors = ["Felipe Coury <felipe.coury@gmail.com>"]
+description = "Inline external scripts, styles and images in HTML files using Cloudflare's lol-html."
 edition = "2021"
+license = "MIT"
 name = "lol-inline-assets"
-version = "0.1.0"
+repository = "https://github.com/fcoury/lol-inline-assets-rs"
+version = "0.0.1"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
