@@ -61,7 +61,6 @@ where
                     }
 
                     let path = root.clone().join(href);
-                    println!("path: {:?}", path);
                     let mut css = fs::read_to_string(&path)?;
 
                     if let Some(media) = el.get_attribute("media") {
