@@ -38,7 +38,11 @@ where
                     if !path.exists() {
                         return Err(Box::new(Error::new(
                             ErrorKind::NotFound,
-                            format!("Can't inline image {}: file does not exist", src),
+                            format!(
+                                "Can't inline image to {}: file \"{}\" does not exist",
+                                file.as_ref().file_name().unwrap().to_str().unwrap(),
+                                src,
+                            ),
                         )));
                     }
                     let img_contents = fs::read(&path)?;
@@ -83,7 +87,11 @@ where
                     if !path.exists() {
                         return Err(Box::new(Error::new(
                             ErrorKind::NotFound,
-                            format!("Can't inline styles from {}: file does not exist", href),
+                            format!(
+                                "Can't inline styles to {}: file \"{}\" does not exist",
+                                file.as_ref().file_name().unwrap().to_str().unwrap(),
+                                href,
+                            ),
                         )));
                     }
                     let mut css = fs::read_to_string(&path)?;
@@ -123,7 +131,11 @@ where
                     if !path.exists() {
                         return Err(Box::new(Error::new(
                             ErrorKind::NotFound,
-                            format!("Can't inline script from {}: file does not exist", src),
+                            format!(
+                                "Can't inline script to {}: file \"{}\" does not exist",
+                                file.as_ref().file_name().unwrap().to_str().unwrap(),
+                                src,
+                            ),
                         )));
                     }
                     let js = fs::read_to_string(&path)?;
