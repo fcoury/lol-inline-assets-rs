@@ -142,10 +142,7 @@ where
                     let mut deps = deps.lock().unwrap();
                     deps.push(path);
 
-                    el.replace(
-                        &format!("<script type=\"text/javascript\">{}</script>", js),
-                        ContentType::Html,
-                    );
+                    el.replace(&format!("<script>{}</script>", js), ContentType::Html);
 
                     Ok(())
                 }),
