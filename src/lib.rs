@@ -1,3 +1,8 @@
+use lol_html::{
+    element,
+    html_content::{ContentType, Element},
+    HtmlRewriter, Settings,
+};
 use std::{
     fs,
     io::{Error, ErrorKind},
@@ -5,16 +10,15 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use lol_html::{element, html_content::ContentType, HtmlRewriter, Settings};
-
 pub struct InlineResult {
     pub html: String,
     pub files: Vec<PathBuf>,
 }
 
-pub fn inline<P>(file: P) -> anyhow::Result<InlineResult>
+pub fn inline<P, F>(file: P, f: Option<F>) -> anyhow::Result<InlineResult>
 where
     P: AsRef<Path>,
+    F: FnMut(&mut Element) + Copy,
 {
     let html = fs::read_to_string(&file)?;
     let root = file.as_ref().parent().unwrap_or(Path::new(""));
@@ -52,6 +56,11 @@ where
                     let new_src = format!("data:image/png;base64,{}", new_src);
 
                     el.set_attribute("src", &new_src)?;
+
+                    if let Some(mut f) = f {
+                        f(el);
+                    }
+
                     Ok(())
                 }),
                 element!("link", |el| {
@@ -107,6 +116,10 @@ where
                         ContentType::Html,
                     );
 
+                    if let Some(mut f) = f {
+                        f(el);
+                    }
+
                     Ok(())
                 }),
                 element!("script", |el| {
@@ -146,6 +159,10 @@ where
                         &format!("<script type=\"text/javascript\">{}</script>", js),
                         ContentType::Html,
                     );
+
+                    if let Some(mut f) = f {
+                        f(el);
+                    }
 
                     Ok(())
                 }),
