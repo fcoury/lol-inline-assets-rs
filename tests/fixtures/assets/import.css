@@ -1,0 +1,5 @@
+@import "external/style.css";
+
+.internal {
+  color: red;
+}

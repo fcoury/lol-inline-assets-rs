@@ -1,0 +1,9 @@
+.first {
+  color: blue;
+}
+
+@import "second.css";
+
+.third {
+  color: yellow;
+}

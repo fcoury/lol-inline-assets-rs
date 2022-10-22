@@ -1,6 +1,5 @@
-use std::{fs, path::Path};
-
 use lol_inline_assets::inline;
+use std::{fs, path::Path};
 
 #[test]
 fn image() {

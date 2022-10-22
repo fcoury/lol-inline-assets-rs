@@ -1,3 +1,5 @@
+use css::Css;
+use lol_html::{element, html_content::ContentType, HtmlRewriter, Settings};
 use std::{
     fs,
     io::{Error, ErrorKind},
@@ -5,8 +7,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use lol_html::{element, html_content::ContentType, HtmlRewriter, Settings};
-
+mod css;
 pub struct InlineResult {
     pub html: String,
     pub files: Vec<PathBuf>,
@@ -21,6 +22,9 @@ where
 
     let mut output = vec![];
     let deps = Arc::new(Mutex::new(vec![]));
+
+    let css = Css::new(file.as_ref(), root.as_ref(), &deps);
+
     let mut rewriter = HtmlRewriter::new(
         Settings {
             element_content_handlers: vec![
@@ -54,60 +58,12 @@ where
                     el.set_attribute("src", &new_src)?;
                     Ok(())
                 }),
-                element!("link", |el| {
-                    let rel = el.get_attribute("rel");
-                    let typ = el.get_attribute("type");
-
-                    if let Some(rel) = rel {
-                        if rel != "stylesheet" {
-                            return Ok(());
-                        }
+                element!("link", |el| match css.handle(el) {
+                    Ok(_) => Ok(()),
+                    Err(e) => {
+                        let err: Box<Error> = Box::new(e.downcast().unwrap());
+                        Err(err)
                     }
-
-                    if let Some(typ) = typ {
-                        if typ != "text/css" {
-                            return Ok(());
-                        }
-                    }
-
-                    let href = el.get_attribute("href");
-                    if href.is_none() {
-                        return Ok(());
-                    }
-                    let href = href.unwrap();
-
-                    if !href.ends_with(".css")
-                        || href.starts_with("http")
-                        || href.starts_with("data:")
-                    {
-                        return Ok(());
-                    }
-
-                    let path = root.clone().join(&href);
-                    if !path.exists() {
-                        return Err(Box::new(Error::new(
-                            ErrorKind::NotFound,
-                            format!(
-                                "Can't inline styles to {}: file \"{}\" does not exist",
-                                file.as_ref().file_name().unwrap().to_str().unwrap(),
-                                href,
-                            ),
-                        )));
-                    }
-                    let mut css = fs::read_to_string(&path)?;
-                    let mut deps = deps.lock().unwrap();
-                    deps.push(path);
-
-                    if let Some(media) = el.get_attribute("media") {
-                        css = format!("@media {} {{ {} }}", media, css);
-                    }
-
-                    el.replace(
-                        &format!(r#"<style type="text/css">{}</style>"#, css),
-                        ContentType::Html,
-                    );
-
-                    Ok(())
                 }),
                 element!("script", |el| {
                     let typ = el.get_attribute("type");
