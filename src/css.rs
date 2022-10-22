@@ -1,5 +1,6 @@
 use anyhow::bail;
 use lol_html::html_content::{ContentType, Element};
+use mime_guess::Mime;
 use regex::{Captures, Regex};
 use std::{
     fs,
@@ -72,9 +73,23 @@ impl<'a> Css<'a> {
             Ok(res) => res,
             Err(missing_import_paths) => {
                 bail!(
-                    "Can't inline styles to {}: missing import files {:?}",
+                    "Can't inline styles to {}: missing files from @import {:?}",
                     self.file.as_path().file_name().unwrap().to_str().unwrap(),
                     missing_import_paths
+                )
+            }
+        };
+        css = res.0;
+        deps.extend(res.1);
+
+        let res = match inline_urls(css, &new_root.to_path_buf()) {
+            Ok(res) => res,
+            Err(missing_url_paths) => {
+                println!("missing_url_paths: {:?}", missing_url_paths);
+                bail!(
+                    "Can't inline styles to {}: missing files from url() {:?}",
+                    self.file.as_path().file_name().unwrap().to_str().unwrap(),
+                    missing_url_paths
                 )
             }
         };
@@ -123,4 +138,58 @@ fn inline_imports(css: String, root: &PathBuf) -> Result<(String, Vec<PathBuf>),
     }
 
     Ok((css.to_string(), deps))
+}
+
+fn inline_urls(css: String, root: &PathBuf) -> Result<(String, Vec<PathBuf>), Vec<PathBuf>> {
+    println!("root = {}", root.display());
+    let re = Regex::new(r#"\burl\(("([^"]*)"|'([^']*)')\)(\s*format\(("([^"]*)"|'([^']*)')\))?"#)
+        .unwrap();
+
+    let mut deps = vec![];
+    let mut missing_files = vec![];
+    let css = re.replace_all(&css, |caps: &Captures| {
+        let path = caps.get(2).or_else(|| caps.get(3)).unwrap().as_str();
+        let path = path.split_once('?').unwrap_or_else(|| (path, path)).0;
+        let path = path.split_once('#').unwrap_or_else(|| (path, path)).0;
+        let path = root.join(path);
+        if !path.exists() {
+            missing_files.push(path);
+            return "".to_string();
+        } else {
+            let new_path = &path
+                .parent()
+                .unwrap_or(Path::new(""))
+                .join(path.file_name().unwrap().to_str().unwrap());
+            deps.push(path.clone());
+            let mime = mime_guess::from_path(&path).first_or_octet_stream();
+            format!(
+                r#"url("{}")"#,
+                to_base64(&fs::read(&new_path).unwrap(), mime)
+            )
+        }
+    });
+
+    if !missing_files.is_empty() {
+        return Err(missing_files);
+    }
+
+    Ok((css.to_string(), deps))
+}
+
+fn to_base64(contents: &[u8], mime: Mime) -> String {
+    let contents = base64::encode(contents);
+    format!("data:{};base64,{}", mime, contents)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_to_base64() {
+        let contents = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+        let mime = mime_guess::from_path("test.eot").first_or_octet_stream();
+        let expected = "data:application/vnd.ms-fontobject;base64,AAECAwQFBgcICQ==";
+        assert_eq!(to_base64(&contents, mime), expected);
+    }
 }
