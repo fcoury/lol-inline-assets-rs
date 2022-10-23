@@ -65,6 +65,36 @@ where
                         Err(err)
                     }
                 }),
+                element!("include", |el| {
+                    let src = el.get_attribute("src");
+                    if src.is_none() {
+                        return Ok(());
+                    }
+                    let src = src.unwrap();
+
+                    if src.starts_with("http") || src.starts_with("data:") {
+                        return Ok(());
+                    }
+
+                    let path = root.clone().join(&src);
+                    if !path.exists() {
+                        return Err(Box::new(Error::new(
+                            ErrorKind::NotFound,
+                            format!(
+                                "Can't include to {}: file \"{}\" does not exist",
+                                file.as_ref().file_name().unwrap().to_str().unwrap(),
+                                src,
+                            ),
+                        )));
+                    }
+                    let contents = fs::read_to_string(&path)?;
+                    let mut deps = deps.lock().unwrap();
+                    deps.push(path);
+
+                    el.replace(&contents, ContentType::Html);
+
+                    Ok(())
+                }),
                 element!("script", |el| {
                     let typ = el.get_attribute("type");
                     if let Some(typ) = typ {
