@@ -69,6 +69,20 @@ impl<'a> Css<'a> {
         }
 
         let new_root = path.parent().unwrap_or(Path::new(""));
+
+        let res = match inline_urls(css, &new_root.to_path_buf()) {
+            Ok(res) => res,
+            Err(missing_url_paths) => {
+                bail!(
+                    "Can't inline styles to {}: missing files from url() {:?}",
+                    self.file.as_path().file_name().unwrap().to_str().unwrap(),
+                    missing_url_paths
+                )
+            }
+        };
+        css = res.0;
+        deps.extend(res.1);
+
         let res = match inline_imports(css, &new_root.to_path_buf()) {
             Ok(res) => res,
             Err(missing_import_paths) => {
@@ -76,20 +90,6 @@ impl<'a> Css<'a> {
                     "Can't inline styles to {}: missing files from @import {:?}",
                     self.file.as_path().file_name().unwrap().to_str().unwrap(),
                     missing_import_paths
-                )
-            }
-        };
-        css = res.0;
-        deps.extend(res.1);
-
-        let res = match inline_urls(css, &new_root.to_path_buf()) {
-            Ok(res) => res,
-            Err(missing_url_paths) => {
-                println!("missing_url_paths: {:?}", missing_url_paths);
-                bail!(
-                    "Can't inline styles to {}: missing files from url() {:?}",
-                    self.file.as_path().file_name().unwrap().to_str().unwrap(),
-                    missing_url_paths
                 )
             }
         };
@@ -113,22 +113,34 @@ fn inline_imports(css: String, root: &PathBuf) -> Result<(String, Vec<PathBuf>),
     let css = re.replace_all(&css, |caps: &Captures| {
         let path = caps.get(2).or_else(|| caps.get(3)).unwrap().as_str();
         let path = root.join(path);
-        println!("Import path: {}", path.display());
         if !path.exists() {
             missing_files.push(path);
             return "".to_string();
-        } else {
-            let new_root = &path.parent().unwrap_or(Path::new(""));
-            deps.push(path.clone());
-            match inline_imports(fs::read_to_string(&path).unwrap(), &new_root.to_path_buf()) {
-                Ok((css, nested_deps)) => {
-                    deps.extend(nested_deps);
-                    css
-                }
-                Err(nested_missing_files) => {
-                    missing_files.extend(nested_missing_files);
-                    "".to_string()
-                }
+        }
+
+        let new_root = &path.parent().unwrap_or(Path::new(""));
+        deps.push(path.clone());
+
+        let css = fs::read_to_string(&path).unwrap();
+        let css = match inline_urls(css, &new_root.to_path_buf()) {
+            Ok((css, nested_deps)) => {
+                deps.extend(nested_deps);
+                css
+            }
+            Err(missing_import_paths) => {
+                missing_files.extend(missing_import_paths);
+                return "".to_string();
+            }
+        };
+
+        match inline_imports(css, &new_root.to_path_buf()) {
+            Ok((css, nested_deps)) => {
+                deps.extend(nested_deps);
+                css
+            }
+            Err(nested_missing_files) => {
+                missing_files.extend(nested_missing_files);
+                "".to_string()
             }
         }
     });
@@ -141,32 +153,53 @@ fn inline_imports(css: String, root: &PathBuf) -> Result<(String, Vec<PathBuf>),
 }
 
 fn inline_urls(css: String, root: &PathBuf) -> Result<(String, Vec<PathBuf>), Vec<PathBuf>> {
-    println!("root = {}", root.display());
-    let re = Regex::new(r#"\burl\(("([^"]*)"|'([^']*)')\)(\s*format\(("([^"]*)"|'([^']*)')\))?"#)
-        .unwrap();
+    let dismiss_re = Regex::new(r#"url\(\s*(data|https?):.*\s*\)"#).unwrap();
+    if dismiss_re.is_match(&css) {
+        return Ok((css, vec![]));
+    }
+
+    let re = Regex::new(
+        r#"\burl\(("([^"]*)"|'([^']*)'|([^)]*?))\)(\s*format\(("([^"]*)"|'([^']*)')\))?"#,
+    )
+    .unwrap();
+    let exluded_data_re = Regex::new(r#"^(data|https?):"#).unwrap();
 
     let mut deps = vec![];
     let mut missing_files = vec![];
     let css = re.replace_all(&css, |caps: &Captures| {
-        let path = caps.get(2).or_else(|| caps.get(3)).unwrap().as_str();
+        let path = caps
+            .get(2)
+            .or_else(|| caps.get(3).or_else(|| caps.get(4)))
+            .unwrap()
+            .as_str();
+        if exluded_data_re.is_match(path) {
+            return caps.get(0).unwrap().as_str().to_string();
+        }
         let path = path.split_once('?').unwrap_or_else(|| (path, path)).0;
         let path = path.split_once('#').unwrap_or_else(|| (path, path)).0;
         let path = root.join(path);
+
         if !path.exists() {
             missing_files.push(path);
             return "".to_string();
-        } else {
-            let new_path = &path
-                .parent()
-                .unwrap_or(Path::new(""))
-                .join(path.file_name().unwrap().to_str().unwrap());
-            deps.push(path.clone());
-            let mime = mime_guess::from_path(&path).first_or_octet_stream();
-            format!(
-                r#"url("{}")"#,
-                to_base64(&fs::read(&new_path).unwrap(), mime)
-            )
         }
+
+        let format = match caps.get(7).or_else(|| caps.get(8)) {
+            Some(format) => format!(r#" format("{}")"#, format.as_str()),
+            None => "".to_string(),
+        };
+
+        let new_path = &path
+            .parent()
+            .unwrap_or(Path::new(""))
+            .join(path.file_name().unwrap().to_str().unwrap());
+        deps.push(path.clone());
+        let mime = mime_guess::from_path(&path).first_or_octet_stream();
+        format!(
+            r#"url("{}"){}"#,
+            to_base64(&fs::read(&new_path).unwrap(), mime),
+            format,
+        )
     });
 
     if !missing_files.is_empty() {
