@@ -26,6 +26,7 @@ fn css_with_url() {
         inlined.files,
         vec![
             Path::new("tests/fixtures/assets/css/url.css"),
+            Path::new("tests/fixtures/assets/css/../logo.png"),
             Path::new("tests/fixtures/assets/css/shared/shared.css"),
             Path::new("tests/fixtures/assets/css/shared/fonts.css"),
             Path::new("tests/fixtures/assets/css/shared/../../fonts/OpenSans-Bold.woff2"),
@@ -34,7 +35,6 @@ fn css_with_url() {
             Path::new("tests/fixtures/assets/css/shared/../../fonts/OpenSans-Bold.woff"),
             Path::new("tests/fixtures/assets/css/shared/../../fonts/OpenSans-Bold.ttf"),
             Path::new("tests/fixtures/assets/css/shared/../../fonts/OpenSans-Bold.svg"),
-            Path::new("tests/fixtures/assets/css/../logo.png"),
         ]
     );
 }

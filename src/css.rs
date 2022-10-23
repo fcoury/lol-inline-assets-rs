@@ -69,18 +69,6 @@ impl<'a> Css<'a> {
         }
 
         let new_root = path.parent().unwrap_or(Path::new(""));
-        let res = match inline_imports(css, &new_root.to_path_buf()) {
-            Ok(res) => res,
-            Err(missing_import_paths) => {
-                bail!(
-                    "Can't inline styles to {}: missing files from @import {:?}",
-                    self.file.as_path().file_name().unwrap().to_str().unwrap(),
-                    missing_import_paths
-                )
-            }
-        };
-        css = res.0;
-        deps.extend(res.1);
 
         let res = match inline_urls(css, &new_root.to_path_buf()) {
             Ok(res) => res,
@@ -89,6 +77,19 @@ impl<'a> Css<'a> {
                     "Can't inline styles to {}: missing files from url() {:?}",
                     self.file.as_path().file_name().unwrap().to_str().unwrap(),
                     missing_url_paths
+                )
+            }
+        };
+        css = res.0;
+        deps.extend(res.1);
+
+        let res = match inline_imports(css, &new_root.to_path_buf()) {
+            Ok(res) => res,
+            Err(missing_import_paths) => {
+                bail!(
+                    "Can't inline styles to {}: missing files from @import {:?}",
+                    self.file.as_path().file_name().unwrap().to_str().unwrap(),
+                    missing_import_paths
                 )
             }
         };
@@ -177,7 +178,7 @@ fn inline_urls(css: String, root: &PathBuf) -> Result<(String, Vec<PathBuf>), Ve
             return "".to_string();
         }
 
-        let format = match caps.get(6).or_else(|| caps.get(7)) {
+        let format = match caps.get(7).or_else(|| caps.get(8)) {
             Some(format) => format!(r#" format("{}")"#, format.as_str()),
             None => "".to_string(),
         };
