@@ -158,14 +158,20 @@ fn inline_urls(css: String, root: &PathBuf) -> Result<(String, Vec<PathBuf>), Ve
         return Ok((css, vec![]));
     }
 
-    let re = Regex::new(r#"\burl\(("([^"]*)"|'([^']*)')\)(\s*format\(("([^"]*)"|'([^']*)')\))?"#)
-        .unwrap();
+    let re = Regex::new(
+        r#"\burl\(("([^"]*)"|'([^']*)'|([^)]*?))\)(\s*format\(("([^"]*)"|'([^']*)')\))?"#,
+    )
+    .unwrap();
     let exluded_data_re = Regex::new(r#"^(data|https?):"#).unwrap();
 
     let mut deps = vec![];
     let mut missing_files = vec![];
     let css = re.replace_all(&css, |caps: &Captures| {
-        let path = caps.get(2).or_else(|| caps.get(3)).unwrap().as_str();
+        let path = caps
+            .get(2)
+            .or_else(|| caps.get(3).or_else(|| caps.get(4)))
+            .unwrap()
+            .as_str();
         if exluded_data_re.is_match(path) {
             return caps.get(0).unwrap().as_str().to_string();
         }
