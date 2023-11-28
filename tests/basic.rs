@@ -44,3 +44,11 @@ fn html() {
         vec![Path::new("tests/fixtures/./assets/js/include.js")]
     );
 }
+
+#[test]
+fn html_inline_js_base64() {
+    let inlined = inline("tests/fixtures/html-d3.html").unwrap();
+    assert!(inlined
+        .html
+        .contains(r#"<script src="data:application/javascript;base64,Ly8gaHR0cHM6L"#));
+}

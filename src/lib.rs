@@ -23,7 +23,7 @@ where
     let mut output = vec![];
     let deps = Arc::new(Mutex::new(vec![]));
 
-    let css = Css::new(file.as_ref(), root.as_ref(), &deps);
+    let css = Css::new(file.as_ref(), root, &deps);
 
     let mut rewriter = HtmlRewriter::new(
         Settings {
@@ -38,7 +38,7 @@ where
                         return Ok(());
                     }
 
-                    let path = root.clone().join(&src);
+                    let path = root.join(&src);
                     if !path.exists() {
                         return Err(Box::new(Error::new(
                             ErrorKind::NotFound,
@@ -76,7 +76,7 @@ where
                         return Ok(());
                     }
 
-                    let path = root.clone().join(&src);
+                    let path = root.join(&src);
                     if !path.exists() {
                         return Err(Box::new(Error::new(
                             ErrorKind::NotFound,
@@ -113,7 +113,30 @@ where
                         return Ok(());
                     }
 
-                    let path = root.clone().join(&src);
+                    let base64 = el.get_attribute("base64");
+                    if base64.is_some() {
+                        let path = root.join(&src);
+                        if !path.exists() {
+                            return Err(Box::new(Error::new(
+                                ErrorKind::NotFound,
+                                format!(
+                                    "Can't inline script to {}: file \"{}\" does not exist",
+                                    file.as_ref().file_name().unwrap().to_str().unwrap(),
+                                    src,
+                                ),
+                            )));
+                        }
+                        let js = fs::read(&path)?;
+                        let mut deps = deps.lock().unwrap();
+                        deps.push(path);
+                        let new_src = base64::encode(js);
+                        let new_src = format!("data:application/javascript;base64,{}", new_src);
+
+                        el.set_attribute("src", &new_src)?;
+                        return Ok(());
+                    }
+
+                    let path = root.join(&src);
                     if !path.exists() {
                         return Err(Box::new(Error::new(
                             ErrorKind::NotFound,
