@@ -51,20 +51,15 @@ where
                     }
                     let img_contents = fs::read(&path)?;
 
-                    let mime_type = if path.extension().map_or(false, |e| e == "svg") {
-                        "image/svg+xml".to_string()
+                    let mime_type:String = if path.extension().map_or(false, |element| element == "svg") {
+                        "image/svg+xml".into()
                     } else if let Some(kind) = infer::get(&img_contents) {
-                        let content_type = kind.mime_type();
-                        if content_type == "application/xml" {
-                            content_type.to_string()
-                        } else {
-                            content_type.to_string()
-                        }
+                        kind.mime_type().into()
                     } else {
-                        let ext = path.extension()
-                            .and_then(|ext| ext.to_str())
+                        let extension = path.extension()
+                            .and_then(|element| element.to_str())
                             .unwrap_or("");
-                        mime_guess::from_ext(ext)
+                        mime_guess::from_ext(extension)
                             .first_or_octet_stream()
                             .to_string()
                     };
