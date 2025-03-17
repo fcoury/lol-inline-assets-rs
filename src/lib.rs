@@ -50,10 +50,31 @@ where
                         )));
                     }
                     let img_contents = fs::read(&path)?;
+
+                    let mime_type:String = if path.extension().map_or(false, |element| element == "svg") {
+                        "image/svg+xml".into()
+                    } else if let Some(kind) = infer::get(&img_contents) {
+                        kind.mime_type().into()
+                    } else {
+                        let extension = path.extension()
+                            .and_then(|element| element.to_str())
+                            .unwrap_or("");
+                        mime_guess::from_ext(extension)
+                            .first_or_octet_stream()
+                            .to_string()
+                    };
+                    
+                    if !mime_type.starts_with("image/") {
+                        return Err(Box::new(Error::new(
+                            ErrorKind::InvalidData,
+                            format!("File {} is not a recognized image type", src),
+                        )))
+                    }
+
                     let mut deps = deps.lock().unwrap();
                     deps.push(path);
                     let new_src = base64::encode(img_contents);
-                    let new_src = format!("data:image/png;base64,{}", new_src);
+                    let new_src = format!("data:{};base64,{}", mime_type, new_src);
 
                     el.set_attribute("src", &new_src)?;
                     Ok(())
